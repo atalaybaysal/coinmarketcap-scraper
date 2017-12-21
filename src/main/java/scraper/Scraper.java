@@ -10,21 +10,22 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.FileOutputStream;
-import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Scraper
 {
-    public static void main( String[] args ) throws IOException
+    public static void main( String[] args ) throws Exception
     {
+        final int topLimit = 100;
+        final Map<String,String> currencies = Scraper.getTopCurrencyList(topLimit);
+
         XSSFWorkbook workbook = new XSSFWorkbook();
 
-        final String[] cryptoCurrencies = {"bitcoin", "ethereum"};
-
-        for (int i = 0; cryptoCurrencies.length > i; i++) {
-
-            try {
-                Document document = Jsoup.connect(String.format("https://coinmarketcap.com/currencies/%s/historical-data/?start=20130428&end=20171215", cryptoCurrencies[i])).get();
-                XSSFSheet sheet = workbook.createSheet(cryptoCurrencies[i]);
+        try {
+            for (Map.Entry<String,String> currency : currencies.entrySet()) {
+                Document document = Jsoup.connect(String.format("https://coinmarketcap.com/currencies/%s/historical-data/?start=20130428&end=20171215", currency.getValue())).get();
+                XSSFSheet sheet = workbook.createSheet(currency.getKey());
 
                 int rowNumber = 0;
                 for (Element record : document.select("tbody tr")) {
@@ -35,9 +36,9 @@ public class Scraper
                         cell.setCellValue(data.text());
                     }
                 }
-            } catch (Exception e) {
-                continue;
             }
+        } catch (Exception e) {
+            throw new Exception("An error occurred while fetching historical data");
         }
 
         FileOutputStream outputStream = new FileOutputStream("scrapedData.xlsx");
@@ -45,5 +46,25 @@ public class Scraper
         workbook.close();
 
         System.out.println("Done");
+    }
+
+    protected static Map<String,String> getTopCurrencyList(int topLimit) throws Exception {
+        try {
+            Document document = Jsoup.connect("https://coinmarketcap.com/all/views/all/").get();
+
+            Map<String,String> currencyList = new HashMap<String, String>();
+            for (Element element : document.select("span.currency-symbol a")) {
+                String urlPart = element.attr("href");
+                currencyList.put(element.text(), urlPart.substring(12, urlPart.length() - 1));
+
+                if (currencyList.size() == topLimit) {
+                    break;
+                }
+            }
+
+            return currencyList;
+        } catch (Exception e) {
+            throw new Exception("An error occurred while fetching top list");
+        }
     }
 }
